@@ -60,28 +60,28 @@ concurrency:
 
 jobs:
   lint-python:
-    uses: saratrajan/ci-cd-templates/.github/workflows/lint-python.yml@v1
+    uses: saratrajan/ci-cd-templates/.github/workflows/lint-python.yml@v1.0.0
 
   lint-markdown:
-    uses: saratrajan/ci-cd-templates/.github/workflows/lint-markdown.yml@v1
+    uses: saratrajan/ci-cd-templates/.github/workflows/lint-markdown.yml@v1.0.0
 
   tests:
-    uses: saratrajan/ci-cd-templates/.github/workflows/test-python.yml@v1
+    uses: saratrajan/ci-cd-templates/.github/workflows/test-python.yml@v1.0.0
     with:
       python-versions: '["3.12", "3.13"]'
 
   secrets:
-    uses: saratrajan/ci-cd-templates/.github/workflows/scan-secrets.yml@v1
+    uses: saratrajan/ci-cd-templates/.github/workflows/scan-secrets.yml@v1.0.0
 
   trivy:
-    uses: saratrajan/ci-cd-templates/.github/workflows/scan-trivy.yml@v1
+    uses: saratrajan/ci-cd-templates/.github/workflows/scan-trivy.yml@v1.0.0
 ```
 
 A Spring Boot service would call the Java build in place of the Python jobs:
 
 ```yaml
   build:
-    uses: saratrajan/ci-cd-templates/.github/workflows/build-java-springboot.yml@v1
+    uses: saratrajan/ci-cd-templates/.github/workflows/build-java-springboot.yml@v1.0.0
     with:
       java-version: "21"
 ```
@@ -199,9 +199,15 @@ without it the job fails with "Forbidden".
 
 ## Versions
 
-Call the templates by tag, as in `@v1`, not by branch. `v1` moves forward with
-changes that do not break callers; a change that does gets `v2`, and `v1`
-stays where it was. To pin exactly, use a full commit SHA in place of the tag.
+Releases follow [semantic versioning](https://semver.org): `v1.1.0` adds a
+template or an input, `v1.0.1` fixes one, and `v2.0.0` changes something that
+breaks callers. Each version is a tag with a release that lists what changed,
+and a published tag never moves.
+
+Call the templates by version, as in `@v1.0.0`, not by branch. To adopt a
+newer release, change the version in the calling workflow. The tag `v1` is
+the same commit as `v1.0.0`, kept so early callers keep working; new callers
+should use the full version.
 
 ## Changing a template
 
@@ -209,7 +215,8 @@ This repository is trunk-based: branch from `main`, open a pull request, and
 merge when the checks pass. Its self-check validates every workflow file with
 actionlint and runs each template against a small fixture in
 `tests/fixtures/`, so a broken template is caught here first. A new template
-needs a fixture and a job in `self-check.yml`.
+needs a fixture and a job in `self-check.yml`, and reaches callers with the
+next release.
 
 ## Licence
 
