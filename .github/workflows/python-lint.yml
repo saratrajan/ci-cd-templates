@@ -1,0 +1,47 @@
+# Reusable: lint Python with ruff. The rules come from the calling
+# repository's own pyproject.toml or ruff.toml.
+name: Python lint
+
+on:
+  workflow_call:
+    inputs:
+      python-version:
+        description: Python version to run ruff on.
+        type: string
+        default: "3.13"
+      ruff-version:
+        description: A pip version specifier for ruff, for example ">=0.8" or "==0.17.6".
+        type: string
+        default: ">=0.8"
+      paths:
+        description: Files or folders to lint, separated by spaces.
+        type: string
+        default: "."
+      runs-on:
+        description: Runner label.
+        type: string
+        default: ubuntu-latest
+
+permissions:
+  contents: read
+
+jobs:
+  ruff:
+    name: ruff
+    runs-on: ${{ inputs.runs-on }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ inputs.python-version }}
+      - name: Install ruff
+        env:
+          RUFF_SPEC: ruff${{ inputs.ruff-version }}
+        run: pip install "$RUFF_SPEC"
+      - name: Lint
+        env:
+          LINT_PATHS: ${{ inputs.paths }}
+        # The paths are split on spaces on purpose.
+        run: |
+          # shellcheck disable=SC2086
+          ruff check --output-format=github $LINT_PATHS

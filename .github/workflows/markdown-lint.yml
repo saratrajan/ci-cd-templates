@@ -1,0 +1,28 @@
+# Reusable: lint Markdown with markdownlint-cli2. Rules and ignores come from
+# the calling repository's .markdownlint-cli2.yaml, if it has one.
+name: Markdown lint
+
+on:
+  workflow_call:
+    inputs:
+      globs:
+        description: Files to lint, as markdownlint-cli2 globs separated by spaces. Leave empty to use the globs in the repository's own settings file.
+        type: string
+        default: ""
+      runs-on:
+        description: Runner label.
+        type: string
+        default: ubuntu-latest
+
+permissions:
+  contents: read
+
+jobs:
+  markdownlint:
+    name: markdownlint
+    runs-on: ${{ inputs.runs-on }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: DavidAnson/markdownlint-cli2-action@v19
+        with:
+          globs: ${{ inputs.globs }}

@@ -1,0 +1,62 @@
+# Reusable: install a Python project and run its tests with pytest.
+name: Python tests
+
+on:
+  workflow_call:
+    inputs:
+      python-versions:
+        description: A JSON list of Python versions to test on, for example '["3.12", "3.13"]'.
+        type: string
+        default: '["3.13"]'
+      install:
+        description: What to pip install for the project itself, for example '-e ".[dev]"' or "-r requirements.txt".
+        type: string
+        default: '-e ".[dev]"'
+      pre-install:
+        description: An optional pip install that must happen first, for example a CPU-only build of PyTorch with its own index URL. Arguments to pip install.
+        type: string
+        default: ""
+      test-command:
+        description: The command that runs the tests.
+        type: string
+        default: python -m pytest -q
+      cache-dependency-path:
+        description: The file whose contents decide when the pip cache is refreshed.
+        type: string
+        default: pyproject.toml
+      runs-on:
+        description: Runner label.
+        type: string
+        default: ubuntu-latest
+
+permissions:
+  contents: read
+
+jobs:
+  pytest:
+    name: pytest (Python ${{ matrix.python-version }})
+    runs-on: ${{ inputs.runs-on }}
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ${{ fromJSON(inputs.python-versions) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: ${{ inputs.cache-dependency-path }}
+      - name: Install what must come first
+        if: inputs.pre-install != ''
+        env:
+          PRE_INSTALL: ${{ inputs.pre-install }}
+        run: eval "pip install $PRE_INSTALL"
+      - name: Install the project
+        env:
+          INSTALL: ${{ inputs.install }}
+        run: eval "pip install $INSTALL"
+      - name: Run the tests
+        env:
+          TEST_COMMAND: ${{ inputs.test-command }}
+        run: eval "$TEST_COMMAND"
