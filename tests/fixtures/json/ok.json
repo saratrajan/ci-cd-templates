@@ -1,0 +1,6 @@
+{
+  "service": "sample",
+  "replicas": 2,
+  "ports": [8080, 8443],
+  "labels": {"team": "platform", "tier": "backend"}
+}

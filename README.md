@@ -17,6 +17,8 @@ the categories are in the file names: `lint-`, `test-`, `build-` and `scan-`.
 | [`lint-markdown.yml`](.github/workflows/lint-markdown.yml) | markdownlint | `.markdownlint.yaml` for rules, `.markdownlintignore` for folders to skip |
 | [`lint-shell.yml`](.github/workflows/lint-shell.yml) | ShellCheck | `.shellcheckrc` |
 | [`lint-powershell.yml`](.github/workflows/lint-powershell.yml) | PSScriptAnalyzer | a settings file you name in `settings` |
+| [`lint-yaml.yml`](.github/workflows/lint-yaml.yml) | yamllint | `.yamllint`, `.yamllint.yaml` or `.yamllint.yml`; without one, a moderate built-in set |
+| [`lint-json.yml`](.github/workflows/lint-json.yml) | Python's JSON parser | none; it checks syntax and repeated keys, not style |
 
 ### Test and build
 
@@ -119,6 +121,31 @@ Every workflow also takes `runs-on` (default `ubuntu-latest`).
 | `path` | `"."` | Folder searched for `.ps1`, `.psm1` and `.psd1` files |
 | `severity` | `"Error,Warning"` | Severities that fail the job |
 | `settings` | empty | Path to a PSScriptAnalyzer settings file in your repository |
+
+### `lint-yaml.yml`
+
+| Input | Default | Meaning |
+| --- | --- | --- |
+| `paths` | `"."` | Files or folders to lint, separated by spaces; folders are searched for `.yaml` and `.yml` files |
+| `config-file` | empty | Path to a yamllint settings file, if it is not one of the standard names in the repository root |
+| `strict` | `false` | Fail on warnings as well as errors |
+| `python-version` | `"3.13"` | Python version to run yamllint on |
+| `yamllint-version` | `">=1.35"` | A pip version specifier for yamllint |
+
+With no settings file, the rules are yamllint's defaults minus four that
+object to ordinary workflow files: line length, a `---` first line, the `on:`
+key, and a comment one space after the code.
+
+### `lint-json.yml`
+
+| Input | Default | Meaning |
+| --- | --- | --- |
+| `patterns` | `"*.json"` | File name patterns to check; files tracked by git are matched anywhere in the repository |
+| `exclude` | empty | Patterns to skip, separated by spaces |
+| `allow-duplicate-keys` | `false` | Accept a key that appears twice in the same object |
+
+Files that allow comments or trailing commas, such as `tsconfig.json` and the
+files in `.vscode/`, are not strict JSON and will fail; list them in `exclude`.
 
 ### `test-python.yml`
 

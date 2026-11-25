@@ -1,0 +1,92 @@
+# Reusable: check that JSON files are valid JSON, using the Python already on
+# the runner. It checks syntax, not style, and also reports a key that appears
+# twice in the same object, which a parser accepts silently.
+name: JSON lint
+
+on:
+  workflow_call:
+    inputs:
+      patterns:
+        description: File name patterns to check, separated by spaces. Files tracked by git are matched anywhere in the repository.
+        type: string
+        default: "*.json"
+      exclude:
+        description: Patterns to skip, separated by spaces, for example "*.code-workspace .vscode/* tsconfig*.json" for files that allow comments.
+        type: string
+        default: ""
+      allow-duplicate-keys:
+        description: Accept a key that appears twice in the same object.
+        type: boolean
+        default: false
+      runs-on:
+        description: Runner label.
+        type: string
+        default: ubuntu-latest
+
+permissions:
+  contents: read
+
+jobs:
+  json:
+    name: json
+    runs-on: ${{ inputs.runs-on }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Lint
+        env:
+          PATTERNS: ${{ inputs.patterns }}
+          EXCLUDE: ${{ inputs.exclude }}
+          ALLOW_DUPLICATES: ${{ inputs.allow-duplicate-keys }}
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          import subprocess
+          import sys
+
+          patterns = os.environ["PATTERNS"].split()
+          exclude = [f":(exclude){p}" for p in os.environ["EXCLUDE"].split()]
+          allow_duplicates = os.environ["ALLOW_DUPLICATES"] == "true"
+          if not patterns:
+              sys.exit("::error::The patterns input is empty.")
+
+          listed = subprocess.run(["git", "ls-files", "-z", "--", *patterns, *exclude],
+                                  check=True, capture_output=True).stdout
+          files = [f for f in listed.decode().split("\0") if f]
+          if not files:
+              print("No JSON files matched:", " ".join(patterns))
+              sys.exit(0)
+
+
+          def pairs(found, duplicates):
+              keys = [key for key, _ in found]
+              duplicates.update(key for key in keys if keys.count(key) > 1)
+              return dict(found)
+
+
+          def constant(name):
+              raise ValueError(f"{name} is not valid JSON")
+
+
+          failed = 0
+          for path in files:
+              duplicates = set()
+              try:
+                  with open(path, encoding="utf-8") as handle:
+                      json.loads(handle.read(), object_pairs_hook=lambda found: pairs(found, duplicates),
+                                 parse_constant=constant)
+              except json.JSONDecodeError as err:
+                  failed += 1
+                  print(f"::error file={path},line={err.lineno},col={err.colno}::{err.msg}")
+                  continue
+              except (ValueError, OSError) as err:
+                  failed += 1
+                  print(f"::error file={path}::{err}")
+                  continue
+              if duplicates and not allow_duplicates:
+                  failed += 1
+                  print(f"::error file={path}::The same key appears twice in one object: {', '.join(sorted(duplicates))}")
+
+          print(f"Checked {len(files)} file(s), {failed} with errors")
+          sys.exit(1 if failed else 0)
+          PY
