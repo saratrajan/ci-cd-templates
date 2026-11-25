@@ -1,14 +1,19 @@
-# Reusable: lint Markdown with markdownlint-cli2. Rules and ignores come from
-# the calling repository's .markdownlint-cli2.yaml, if it has one.
+# Reusable: lint Markdown with markdownlint. Rules come from the calling
+# repository's .markdownlint.yaml, and folders to skip from its
+# .markdownlintignore, if it has them.
 name: Markdown lint
 
 on:
   workflow_call:
     inputs:
       globs:
-        description: Files to lint, as markdownlint-cli2 globs separated by spaces. Leave empty to use the globs in the repository's own settings file.
+        description: Files to lint, as quoted glob patterns separated by spaces.
         type: string
-        default: ""
+        default: '"**/*.md"'
+      markdownlint-version:
+        description: Version of the markdownlint command-line tool to use.
+        type: string
+        default: "0.50.1"
       runs-on:
         description: Runner label.
         type: string
@@ -23,6 +28,9 @@ jobs:
     runs-on: ${{ inputs.runs-on }}
     steps:
       - uses: actions/checkout@v7
-      - uses: DavidAnson/markdownlint-cli2-action@v25
-        with:
-          globs: ${{ inputs.globs }}
+      - name: Lint
+        env:
+          GLOBS: ${{ inputs.globs }}
+          TOOL: markdownlint-cli@${{ inputs.markdownlint-version }}
+        # The globs come from the calling workflow file and are expanded by the tool, not the shell.
+        run: eval "npx --yes \"\$TOOL\" $GLOBS"

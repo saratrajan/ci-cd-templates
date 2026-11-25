@@ -14,7 +14,7 @@ the categories are in the file names: `lint-`, `test-`, `build-` and `scan-`.
 | Workflow | Tool | Settings it reads from your repository |
 | --- | --- | --- |
 | [`lint-python.yml`](.github/workflows/lint-python.yml) | ruff | `pyproject.toml` or `ruff.toml` |
-| [`lint-markdown.yml`](.github/workflows/lint-markdown.yml) | markdownlint-cli2 | `.markdownlint-cli2.yaml` |
+| [`lint-markdown.yml`](.github/workflows/lint-markdown.yml) | markdownlint | `.markdownlint.yaml` for rules, `.markdownlintignore` for folders to skip |
 | [`lint-shell.yml`](.github/workflows/lint-shell.yml) | ShellCheck | `.shellcheckrc` |
 | [`lint-powershell.yml`](.github/workflows/lint-powershell.yml) | PSScriptAnalyzer | a settings file you name in `settings` |
 
@@ -102,7 +102,8 @@ Every workflow also takes `runs-on` (default `ubuntu-latest`).
 
 | Input | Default | Meaning |
 | --- | --- | --- |
-| `globs` | empty | Files to lint. Empty means: use the globs in your `.markdownlint-cli2.yaml` |
+| `globs` | `'"**/*.md"'` | Files to lint, as quoted glob patterns separated by spaces |
+| `markdownlint-version` | `"0.50.1"` | Version of the markdownlint command-line tool |
 
 ### `lint-shell.yml`
 
@@ -192,7 +193,10 @@ repositories; private ones need GitHub Advanced Security.
 | `fail-on-severity` | `high` | The least serious vulnerability that fails the job |
 | `deny-licenses` | empty | Licences to refuse, as SPDX ids separated by commas |
 
-Runs on pull requests only; on other events the job is skipped.
+Runs on pull requests only; on other events the job is skipped. The calling repository must have the
+dependency graph switched on (Settings, Advanced Security, Dependency graph);
+without it the job fails with "Forbidden". This template is the one not
+exercised by this repository's self-check, for that reason.
 
 ## Versions
 
