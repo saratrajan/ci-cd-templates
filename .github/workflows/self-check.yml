@@ -98,3 +98,18 @@ jobs:
     uses: ./.github/workflows/scan-codeql.yml
     with:
       languages: '["python"]'
+
+  # Dry runs: they read the tags and report, and create nothing.
+  release-tag:
+    name: Template · release tag
+    uses: ./.github/workflows/release-tag.yml
+    with:
+      bump: patch
+      dry-run: true
+
+  release-publish:
+    name: Template · release publish
+    uses: ./.github/workflows/release-publish.yml
+    with:
+      tag: v1.0.0
+      dry-run: true

@@ -1,0 +1,160 @@
+# Reusable: work out the next semantic version and create its tag.
+#
+# Meant to run on a push to the main branch. The size of the step comes from
+# a label on the pull request that was merged: release:major, release:minor
+# or release:patch. No such label means no release, so nothing is tagged.
+#
+# The calling job must grant "contents: write" (to create the tag) and
+# "pull-requests: read" (to read the labels). This file sets no permissions
+# of its own, so a dry run can be called with read access only.
+name: Release tag
+
+on:
+  workflow_call:
+    inputs:
+      bump:
+        description: Force the step (major, minor or patch) and ignore the pull request's labels. Empty means read the labels.
+        type: string
+        default: ""
+      label-prefix:
+        description: The start of the label names. The labels are this followed by major, minor or patch.
+        type: string
+        default: "release:"
+      tag-prefix:
+        description: The start of the tag names, before the version number.
+        type: string
+        default: v
+      initial-version:
+        description: The version to count from when the repository has no version tag yet.
+        type: string
+        default: "0.0.0"
+      dry-run:
+        description: Work out the tag and report it, but create nothing. Always on for pull_request events.
+        type: boolean
+        default: false
+      runs-on:
+        description: Runner label.
+        type: string
+        default: ubuntu-latest
+    outputs:
+      tag:
+        description: The tag for this commit, for example v1.2.0. Empty when there is nothing to release. In a dry run, the tag that would have been created.
+        value: ${{ jobs.tag.outputs.tag }}
+      version:
+        description: The tag without its prefix, for example 1.2.0.
+        value: ${{ jobs.tag.outputs.version }}
+      bump:
+        description: The step that was applied (major, minor or patch), or empty.
+        value: ${{ jobs.tag.outputs.bump }}
+      created:
+        description: "true when this run created the tag."
+        value: ${{ jobs.tag.outputs.created }}
+
+jobs:
+  tag:
+    name: tag
+    runs-on: ${{ inputs.runs-on }}
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
+      version: ${{ steps.tag.outputs.version }}
+      bump: ${{ steps.tag.outputs.bump }}
+      created: ${{ steps.tag.outputs.created }}
+    steps:
+      - name: Work out and create the tag
+        id: tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+          EVENT: ${{ github.event_name }}
+          BUMP: ${{ inputs.bump }}
+          LABEL_PREFIX: ${{ inputs.label-prefix }}
+          TAG_PREFIX: ${{ inputs.tag-prefix }}
+          INITIAL: ${{ inputs.initial-version }}
+          DRY_RUN: ${{ inputs.dry-run }}
+        run: |
+          set -euo pipefail
+
+          finish() {  # tag, bump, created, message
+            {
+              echo "tag=$1"
+              echo "version=${1#"$TAG_PREFIX"}"
+              echo "bump=$2"
+              echo "created=$3"
+            } >> "$GITHUB_OUTPUT"
+            echo "$4"
+            echo "$4" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          }
+
+          # Every version tag in the repository, as "tag sha" lines.
+          version_tags() {
+            gh api --paginate "repos/$REPO/git/matching-refs/tags/$TAG_PREFIX" \
+              --jq '.[] | "\(.ref | sub("^refs/tags/"; "")) \(.object.sha)"' |
+              awk -v prefix="$TAG_PREFIX" '{
+                version = substr($1, length(prefix) + 1)
+                if (index($1, prefix) == 1 && version ~ /^[0-9]+\.[0-9]+\.[0-9]+$/) print
+              }'
+          }
+
+          [ "$EVENT" = "pull_request" ] && DRY_RUN=true
+
+          # 1. Which step? An input wins; otherwise the merged pull request's labels.
+          if [ -n "$BUMP" ]; then
+            bump="$BUMP"
+          else
+            if [ "$EVENT" = "pull_request" ]; then
+              labels=$(jq -r '.pull_request.labels[].name' "$GITHUB_EVENT_PATH")
+            else
+              labels=$(gh api "repos/$REPO/commits/$SHA/pulls" \
+                --jq '([.[] | select(.merged_at != null)][0].labels // [])[].name')
+            fi
+            bump=""
+            for step in patch minor major; do
+              if grep -qxF "${LABEL_PREFIX}${step}" <<< "$labels"; then bump="$step"; fi
+            done
+            if [ -z "$bump" ]; then
+              finish "" "" false "No ${LABEL_PREFIX}major, ${LABEL_PREFIX}minor or ${LABEL_PREFIX}patch label on the merged pull request: nothing to release."
+            fi
+          fi
+          case "$bump" in
+            major | minor | patch) ;;
+            *) echo "::error::bump must be major, minor or patch, not '$bump'."; exit 1 ;;
+          esac
+          if ! [[ "$INITIAL" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::initial-version must look like 0.0.0, not '$INITIAL'."
+            exit 1
+          fi
+
+          # 2. Work out the next version and create the tag. If another run takes
+          #    the same number first, count again from the new latest tag.
+          for attempt in 1 2 3; do
+            tags=$(version_tags)
+
+            # Running again for a commit that already has its tag changes nothing.
+            existing=$(awk -v sha="$SHA" '$2 == sha { print $1 }' <<< "$tags" | sort -V | tail -n 1)
+            if [ -n "$existing" ] && [ "$DRY_RUN" != "true" ]; then
+              finish "$existing" "$bump" false "This commit is already tagged $existing."
+            fi
+
+            latest=$(awk '{ print $1 }' <<< "$tags" | sed "s/^$TAG_PREFIX//" | sort -V | tail -n 1)
+            IFS=. read -r major minor patch <<< "${latest:-$INITIAL}"
+            case "$bump" in
+              major) major=$((major + 1)); minor=0; patch=0 ;;
+              minor) minor=$((minor + 1)); patch=0 ;;
+              patch) patch=$((patch + 1)) ;;
+            esac
+            tag="${TAG_PREFIX}${major}.${minor}.${patch}"
+            from="${latest:+${TAG_PREFIX}${latest}}"
+
+            if [ "$DRY_RUN" = "true" ]; then
+              finish "$tag" "$bump" false "Dry run: a $bump release after ${from:-no earlier version} would be tagged $tag. Nothing was created."
+            fi
+            if gh api -X POST "repos/$REPO/git/refs" -f ref="refs/tags/$tag" -f sha="$SHA" > /dev/null; then
+              finish "$tag" "$bump" true "Created tag $tag ($bump release after ${from:-no earlier version})."
+            fi
+            echo "Could not create $tag (attempt $attempt). Checking the tags again."
+            sleep 2
+          done
+          echo "::error::Could not create the tag. The calling job needs 'contents: write', and a tag rule must allow new tags."
+          exit 1
