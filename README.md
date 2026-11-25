@@ -14,7 +14,7 @@ the categories are in the file names: `lint-`, `test-`, `build-` and `scan-`.
 | Workflow | Tool | Settings it reads from your repository |
 | --- | --- | --- |
 | [`lint-python.yml`](.github/workflows/lint-python.yml) | ruff | `pyproject.toml` or `ruff.toml` |
-| [`lint-markdown.yml`](.github/workflows/lint-markdown.yml) | markdownlint-cli2 | `.markdownlint-cli2.yaml` |
+| [`lint-markdown.yml`](.github/workflows/lint-markdown.yml) | markdownlint | `.markdownlint.yaml` for rules, `.markdownlintignore` for folders to skip |
 | [`lint-shell.yml`](.github/workflows/lint-shell.yml) | ShellCheck | `.shellcheckrc` |
 | [`lint-powershell.yml`](.github/workflows/lint-powershell.yml) | PSScriptAnalyzer | a settings file you name in `settings` |
 
@@ -102,7 +102,8 @@ Every workflow also takes `runs-on` (default `ubuntu-latest`).
 
 | Input | Default | Meaning |
 | --- | --- | --- |
-| `globs` | empty | Files to lint. Empty means: use the globs in your `.markdownlint-cli2.yaml` |
+| `globs` | `'"**/*.md"'` | Files to lint, as quoted glob patterns separated by spaces |
+| `markdownlint-version` | `"0.50.1"` | Version of the markdownlint command-line tool |
 
 ### `lint-shell.yml`
 
