@@ -7,7 +7,8 @@ runners.
 ## What is here
 
 GitHub requires reusable workflows to sit directly in `.github/workflows/`, so
-the categories are in the file names: `lint-`, `test-`, `build-` and `scan-`.
+the categories are in the file names: `lint-`, `test-`, `build-`, `scan-` and
+`release-`.
 
 ### Lint
 
@@ -36,6 +37,13 @@ the categories are in the file names: `lint-`, `test-`, `build-` and `scan-`.
 | [`scan-trivy.yml`](.github/workflows/scan-trivy.yml) | Trivy | Known vulnerabilities in dependencies, infrastructure misconfigurations, and secrets, in the repository or a container image |
 | [`scan-codeql.yml`](.github/workflows/scan-codeql.yml) | CodeQL | Security flaws in your own code (static analysis) |
 | [`scan-dependencies.yml`](.github/workflows/scan-dependencies.yml) | Dependency review | A pull request that adds a vulnerable dependency or a disallowed licence |
+
+### Release
+
+| Workflow | What it does |
+| --- | --- |
+| [`release-tag.yml`](.github/workflows/release-tag.yml) | Works out the next semantic version from a label on the merged pull request and creates the tag |
+| [`release-publish.yml`](.github/workflows/release-publish.yml) | Publishes a GitHub Release for a tag, with notes written from the merged pull requests |
 
 ## Using them
 
@@ -87,6 +95,59 @@ A Spring Boot service would call the Java build in place of the Python jobs:
     with:
       java-version: "21"
 ```
+
+### Releasing on merge
+
+The two release templates are used together, in a workflow of their own that
+runs on every push to `main`:
+
+```yaml
+name: Release
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  tag:
+    permissions:
+      contents: write
+      pull-requests: read
+    uses: saratrajan/ci-cd-templates/.github/workflows/release-tag.yml@v1.1.0
+
+  publish:
+    needs: tag
+    if: needs.tag.outputs.tag != ''
+    permissions:
+      contents: write
+    uses: saratrajan/ci-cd-templates/.github/workflows/release-publish.yml@v1.1.0
+    with:
+      tag: ${{ needs.tag.outputs.tag }}
+```
+
+Then label a pull request before merging it:
+
+| Label | Meaning | Example |
+| --- | --- | --- |
+| `release:major` | A change that breaks existing users | `v1.4.2` to `v2.0.0` |
+| `release:minor` | Something new that breaks nothing | `v1.4.2` to `v1.5.0` |
+| `release:patch` | A fix | `v1.4.2` to `v1.4.3` |
+
+A pull request with none of these labels releases nothing when it is merged,
+which is right for changes to documentation. With more than one, the largest
+step wins. The labels must exist in your repository; create them once under
+Issues, Labels.
+
+The two jobs are chained with `needs` on purpose. A tag created by a workflow
+does not start other workflows, so a separate workflow waiting for a new tag
+would never run.
 
 ## Inputs
 
@@ -224,6 +285,45 @@ Runs on pull requests only; on other events the job is skipped. The calling repo
 dependency graph switched on (Settings, Advanced Security, Dependency graph);
 without it the job fails with "Forbidden".
 
+### `release-tag.yml`
+
+The calling job must grant `contents: write` and `pull-requests: read`.
+
+| Input | Default | Meaning |
+| --- | --- | --- |
+| `bump` | empty | Force `major`, `minor` or `patch` and ignore the labels |
+| `label-prefix` | `"release:"` | The start of the label names |
+| `tag-prefix` | `v` | The start of the tag names, before the version number |
+| `initial-version` | `"0.0.0"` | The version to count from when there is no version tag yet |
+| `dry-run` | `false` | Work out the tag and report it, but create nothing. Always on for pull request events |
+
+| Output | Meaning |
+| --- | --- |
+| `tag` | The tag for this commit, such as `v1.2.0`; empty when there is nothing to release |
+| `version` | The tag without its prefix, such as `1.2.0` |
+| `bump` | The step that was applied, or empty |
+| `created` | `true` when this run created the tag |
+
+Running it again for a commit that already has a version tag reports that tag
+and creates nothing.
+
+### `release-publish.yml`
+
+The calling job must grant `contents: write`.
+
+| Input | Default | Meaning |
+| --- | --- | --- |
+| `tag` | required | The tag to publish a release for; it must exist |
+| `title` | empty | The release title; empty means the tag name |
+| `generate-notes` | `true` | Let GitHub write the notes from the pull requests merged since the previous release |
+| `notes` | empty | Text for the notes; with `generate-notes`, placed above the generated list |
+| `draft` | `false` | Save the release as a draft |
+| `prerelease` | `false` | Mark the release as a pre-release |
+| `dry-run` | `false` | Check the tag and report, but create nothing |
+
+The output `url` is the address of the release. Running it again for a tag
+that already has a release changes nothing.
+
 ## Versions
 
 Releases follow [semantic versioning](https://semver.org): `v1.1.0` adds a
@@ -232,9 +332,7 @@ breaks callers. Each version is a tag with a release that lists what changed,
 and a published tag never moves.
 
 Call the templates by version, as in `@v1.0.0`, not by branch. To adopt a
-newer release, change the version in the calling workflow. The tag `v1` is
-the same commit as `v1.0.0`, kept so early callers keep working; new callers
-should use the full version.
+newer release, change the version in the calling workflow.
 
 ## Changing a template
 
@@ -242,8 +340,13 @@ This repository is trunk-based: branch from `main`, open a pull request, and
 merge when the checks pass. Its self-check validates every workflow file with
 actionlint and runs each template against a small fixture in
 `tests/fixtures/`, so a broken template is caught here first. A new template
-needs a fixture and a job in `self-check.yml`, and reaches callers with the
-next release.
+needs a fixture and a job in `self-check.yml`.
+
+Releases are made by [`release.yml`](.github/workflows/release.yml), which
+uses the two release templates on this repository itself. Label the pull
+request `release:major`, `release:minor` or `release:patch` and the version
+is tagged and published when it is merged; leave the label off for a change
+that needs no release.
 
 ## Licence
 

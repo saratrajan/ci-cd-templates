@@ -1,0 +1,106 @@
+# Reusable: publish a GitHub Release for a tag that already exists.
+#
+# Usually called straight after release-tag.yml, with the tag it reports.
+# Running it again for a tag that already has a release changes nothing.
+#
+# The calling job must grant "contents: write". This file sets no permissions
+# of its own, so a dry run can be called with read access only.
+name: Release publish
+
+on:
+  workflow_call:
+    inputs:
+      tag:
+        description: The tag to publish a release for. It must exist.
+        type: string
+        required: true
+      title:
+        description: The release title. Empty means the tag name.
+        type: string
+        default: ""
+      generate-notes:
+        description: Let GitHub write the notes from the pull requests merged since the previous release.
+        type: boolean
+        default: true
+      notes:
+        description: Text for the release notes. With generate-notes, it is placed above the generated list.
+        type: string
+        default: ""
+      draft:
+        description: Save the release as a draft instead of publishing it.
+        type: boolean
+        default: false
+      prerelease:
+        description: Mark the release as a pre-release.
+        type: boolean
+        default: false
+      dry-run:
+        description: Check the tag and report what would happen, but create nothing.
+        type: boolean
+        default: false
+      runs-on:
+        description: Runner label.
+        type: string
+        default: ubuntu-latest
+    outputs:
+      url:
+        description: The address of the release, or empty in a dry run.
+        value: ${{ jobs.publish.outputs.url }}
+
+jobs:
+  publish:
+    name: publish
+    runs-on: ${{ inputs.runs-on }}
+    outputs:
+      url: ${{ steps.publish.outputs.url }}
+    steps:
+      - name: Publish the release
+        id: publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          TAG: ${{ inputs.tag }}
+          TITLE: ${{ inputs.title }}
+          GENERATE_NOTES: ${{ inputs.generate-notes }}
+          NOTES: ${{ inputs.notes }}
+          DRAFT: ${{ inputs.draft }}
+          PRERELEASE: ${{ inputs.prerelease }}
+          DRY_RUN: ${{ inputs.dry-run }}
+        run: |
+          set -euo pipefail
+
+          report() {
+            echo "$1"
+            echo "$1" >> "$GITHUB_STEP_SUMMARY"
+          }
+
+          if ! gh api "repos/$REPO/git/ref/tags/$TAG" > /dev/null 2>&1; then
+            echo "::error::The tag '$TAG' does not exist in $REPO."
+            exit 1
+          fi
+
+          if url=$(gh release view "$TAG" --repo "$REPO" --json url --jq .url 2> /dev/null); then
+            echo "url=$url" >> "$GITHUB_OUTPUT"
+            report "A release for $TAG already exists: $url"
+            exit 0
+          fi
+
+          args=(--repo "$REPO" --verify-tag --title "${TITLE:-$TAG}")
+          if [ "$GENERATE_NOTES" = "true" ]; then
+            args+=(--generate-notes)
+            [ -n "$NOTES" ] && args+=(--notes "$NOTES")
+          else
+            args+=(--notes "$NOTES")
+          fi
+          [ "$DRAFT" = "true" ] && args+=(--draft)
+          [ "$PRERELEASE" = "true" ] && args+=(--prerelease)
+
+          if [ "$DRY_RUN" = "true" ]; then
+            echo "url=" >> "$GITHUB_OUTPUT"
+            report "Dry run: the tag $TAG exists and has no release yet. Nothing was created."
+            exit 0
+          fi
+
+          url=$(gh release create "$TAG" "${args[@]}")
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          report "Published $TAG: $url"

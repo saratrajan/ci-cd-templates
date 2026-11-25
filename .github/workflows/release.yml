@@ -1,0 +1,35 @@
+# Releases this repository. When a pull request labelled release:major,
+# release:minor or release:patch is merged into main, the next semantic
+# version is tagged and published as a GitHub Release. A merge without one
+# of those labels releases nothing.
+name: Release
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+# One release at a time, in the order the merges happened.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  tag:
+    name: Tag
+    permissions:
+      contents: write        # create the tag
+      pull-requests: read    # read the merged pull request's labels
+    uses: ./.github/workflows/release-tag.yml
+
+  publish:
+    name: Publish
+    needs: tag
+    if: needs.tag.outputs.tag != ''
+    permissions:
+      contents: write        # create the release
+    uses: ./.github/workflows/release-publish.yml
+    with:
+      tag: ${{ needs.tag.outputs.tag }}
