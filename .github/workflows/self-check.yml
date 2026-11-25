@@ -1,24 +1,89 @@
-# Checks for this repository itself: the workflow files are valid, and no secret is committed.
+# Checks for this repository itself. The workflow files are validated, and
+# every template is run against a small fixture in tests/fixtures/, so a
+# broken template is caught here before another repository calls it.
 name: Self check
 
 on:
   pull_request:
   push:
     branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: read
   pull-requests: read
+
+concurrency:
+  group: self-check-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   actionlint:
     name: Workflow lint
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Run actionlint
         run: docker run --rm -v "$PWD:/repo" -w /repo rhysd/actionlint:1.7.7 -color
 
-  secrets:
-    name: Secret scan
-    uses: ./.github/workflows/secret-scan.yml
+  lint-markdown:
+    name: Template · Markdown lint
+    uses: ./.github/workflows/lint-markdown.yml
+
+  lint-shell:
+    name: Template · shell lint
+    uses: ./.github/workflows/lint-shell.yml
+
+  lint-powershell:
+    name: Template · PowerShell lint
+    uses: ./.github/workflows/lint-powershell.yml
+
+  lint-python:
+    name: Template · Python lint
+    uses: ./.github/workflows/lint-python.yml
+    with:
+      paths: tests/fixtures/python-pkg
+
+  test-python:
+    name: Template · Python tests
+    uses: ./.github/workflows/test-python.yml
+    with:
+      python-versions: '["3.12", "3.13"]'
+      install: -e "tests/fixtures/python-pkg[dev]"
+      test-command: python -m pytest -q tests/fixtures/python-pkg
+      cache-dependency-path: tests/fixtures/python-pkg/pyproject.toml
+
+  build-python:
+    name: Template · Python build
+    uses: ./.github/workflows/build-python.yml
+    with:
+      working-directory: tests/fixtures/python-pkg
+      artifact-name: fixture-python-dist
+
+  build-java:
+    name: Template · Java build
+    uses: ./.github/workflows/build-java-springboot.yml
+    with:
+      working-directory: tests/fixtures/java-maven
+      artifact-name: fixture-jar
+
+  scan-secrets:
+    name: Template · secret scan
+    uses: ./.github/workflows/scan-secrets.yml
+
+  scan-trivy:
+    name: Template · Trivy scan
+    uses: ./.github/workflows/scan-trivy.yml
+
+  scan-dependencies:
+    name: Template · dependency review
+    uses: ./.github/workflows/scan-dependencies.yml
+
+  scan-codeql:
+    name: Template · CodeQL
+    permissions:
+      contents: read
+      security-events: write
+    uses: ./.github/workflows/scan-codeql.yml
+    with:
+      languages: '["python"]'

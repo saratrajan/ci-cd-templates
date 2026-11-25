@@ -1,0 +1,83 @@
+# Reusable: scan a repository (or a container image) with Trivy for known
+# vulnerabilities in dependencies, infrastructure misconfigurations and secrets.
+name: Trivy scan
+
+on:
+  workflow_call:
+    inputs:
+      scan-type:
+        description: fs to scan the repository's files, image to scan a container image.
+        type: string
+        default: fs
+      scan-ref:
+        description: For fs, the folder to scan. Ignored for image.
+        type: string
+        default: "."
+      image-ref:
+        description: For image, the image to scan, for example ghcr.io/owner/app:1.2.3.
+        type: string
+        default: ""
+      scanners:
+        description: What to look for, separated by commas (vuln, misconfig, secret, license).
+        type: string
+        default: "vuln,misconfig,secret"
+      severity:
+        description: Severities that fail the job, separated by commas.
+        type: string
+        default: "CRITICAL,HIGH"
+      ignore-unfixed:
+        description: Ignore vulnerabilities that have no fixed version yet.
+        type: boolean
+        default: true
+      fail-on-findings:
+        description: Fail the job when something at the chosen severities is found.
+        type: boolean
+        default: true
+      upload-sarif:
+        description: Also send the results to the repository's Security tab. The calling workflow must then grant security-events write.
+        type: boolean
+        default: false
+      runs-on:
+        description: Runner label.
+        type: string
+        default: ubuntu-latest
+
+permissions:
+  contents: read
+
+jobs:
+  trivy:
+    name: trivy
+    runs-on: ${{ inputs.runs-on }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Scan
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: ${{ inputs.scan-type }}
+          scan-ref: ${{ inputs.scan-ref }}
+          image-ref: ${{ inputs.image-ref }}
+          scanners: ${{ inputs.scanners }}
+          severity: ${{ inputs.severity }}
+          ignore-unfixed: ${{ inputs.ignore-unfixed }}
+          format: table
+          exit-code: ${{ inputs.fail-on-findings && '1' || '0' }}
+      - name: Scan again for the Security tab
+        if: always() && inputs.upload-sarif
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: ${{ inputs.scan-type }}
+          scan-ref: ${{ inputs.scan-ref }}
+          image-ref: ${{ inputs.image-ref }}
+          scanners: ${{ inputs.scanners }}
+          severity: ${{ inputs.severity }}
+          ignore-unfixed: ${{ inputs.ignore-unfixed }}
+          format: sarif
+          output: trivy-results.sarif
+          exit-code: "0"
+      - name: Upload to the Security tab
+        if: always() && inputs.upload-sarif
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: trivy-results.sarif
+          category: trivy

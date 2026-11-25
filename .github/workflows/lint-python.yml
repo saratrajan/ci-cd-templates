@@ -30,8 +30,8 @@ jobs:
     name: ruff
     runs-on: ${{ inputs.runs-on }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: ${{ inputs.python-version }}
       - name: Install ruff

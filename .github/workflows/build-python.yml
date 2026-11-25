@@ -1,0 +1,49 @@
+# Reusable: build a Python package (sdist and wheel) and keep it as an artifact.
+name: Python build
+
+on:
+  workflow_call:
+    inputs:
+      python-version:
+        description: Python version to build with.
+        type: string
+        default: "3.13"
+      working-directory:
+        description: Folder that holds pyproject.toml.
+        type: string
+        default: "."
+      artifact-name:
+        description: Name of the uploaded artifact. Leave empty to skip the upload.
+        type: string
+        default: python-dist
+      runs-on:
+        description: Runner label.
+        type: string
+        default: ubuntu-latest
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: build
+    runs-on: ${{ inputs.runs-on }}
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: ${{ inputs.python-version }}
+      - name: Build sdist and wheel
+        run: |
+          pip install build twine
+          python -m build
+          twine check dist/*
+      - uses: actions/upload-artifact@v7
+        if: inputs.artifact-name != ''
+        with:
+          name: ${{ inputs.artifact-name }}
+          path: ${{ inputs.working-directory }}/dist/
+          if-no-files-found: error

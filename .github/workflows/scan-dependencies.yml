@@ -1,0 +1,34 @@
+# Reusable: on a pull request, fail if it adds a dependency with a known
+# vulnerability or a disallowed licence. Does nothing on other events.
+name: Dependency review
+
+on:
+  workflow_call:
+    inputs:
+      fail-on-severity:
+        description: The least serious vulnerability that fails the job (low, moderate, high or critical).
+        type: string
+        default: high
+      deny-licenses:
+        description: Licences to refuse, as SPDX ids separated by commas. Empty allows any.
+        type: string
+        default: ""
+      runs-on:
+        description: Runner label.
+        type: string
+        default: ubuntu-latest
+
+permissions:
+  contents: read
+
+jobs:
+  review:
+    name: dependency review
+    if: github.event_name == 'pull_request'
+    runs-on: ${{ inputs.runs-on }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/dependency-review-action@v5.0.1
+        with:
+          fail-on-severity: ${{ inputs.fail-on-severity }}
+          deny-licenses: ${{ inputs.deny-licenses }}

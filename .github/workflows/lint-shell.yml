@@ -1,0 +1,48 @@
+# Reusable: lint shell scripts with ShellCheck (already installed on GitHub-hosted Ubuntu runners).
+name: Shell lint
+
+on:
+  workflow_call:
+    inputs:
+      patterns:
+        description: File name patterns to lint, separated by spaces. Files are found anywhere in the repository.
+        type: string
+        default: "*.sh *.bash"
+      severity:
+        description: The least serious finding that fails the job (error, warning, info or style).
+        type: string
+        default: warning
+      runs-on:
+        description: Runner label.
+        type: string
+        default: ubuntu-latest
+
+permissions:
+  contents: read
+
+jobs:
+  shellcheck:
+    name: shellcheck
+    runs-on: ${{ inputs.runs-on }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Lint
+        env:
+          PATTERNS: ${{ inputs.patterns }}
+          SEVERITY: ${{ inputs.severity }}
+        run: |
+          set -f                                   # keep the patterns as patterns
+          args=()
+          for pattern in $PATTERNS; do
+            [ ${#args[@]} -gt 0 ] && args+=(-o)
+            args+=(-name "$pattern")
+          done
+          set +f
+          mapfile -d '' files < <(find . -type f \( "${args[@]}" \) -not -path "./.git/*" -print0)
+          if [ ${#files[@]} -eq 0 ]; then
+            echo "No shell scripts matched: $PATTERNS"
+            exit 0
+          fi
+          echo "Linting ${#files[@]} file(s)"
+          shellcheck --version | sed -n 2p
+          shellcheck --severity="$SEVERITY" "${files[@]}"

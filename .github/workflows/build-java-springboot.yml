@@ -1,0 +1,93 @@
+# Reusable: build and test a Java Spring Boot service with Maven or Gradle,
+# and keep the runnable jar as an artifact.
+name: Java Spring Boot build
+
+on:
+  workflow_call:
+    inputs:
+      java-version:
+        description: Java version.
+        type: string
+        default: "21"
+      distribution:
+        description: JDK distribution for actions/setup-java.
+        type: string
+        default: temurin
+      build-tool:
+        description: maven, gradle, or auto to choose by which build file is present.
+        type: string
+        default: auto
+      working-directory:
+        description: Folder that holds pom.xml or build.gradle.
+        type: string
+        default: "."
+      skip-tests:
+        description: Build without running the tests.
+        type: boolean
+        default: false
+      artifact-name:
+        description: Name of the uploaded artifact. Leave empty to skip the upload.
+        type: string
+        default: app-jar
+      runs-on:
+        description: Runner label.
+        type: string
+        default: ubuntu-latest
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: build
+    runs-on: ${{ inputs.runs-on }}
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Choose the build tool
+        id: tool
+        env:
+          BUILD_TOOL: ${{ inputs.build-tool }}
+        run: |
+          tool="$BUILD_TOOL"
+          if [ "$tool" = "auto" ]; then
+            if [ -f pom.xml ]; then tool=maven
+            elif [ -f build.gradle ] || [ -f build.gradle.kts ]; then tool=gradle
+            else echo "::error::No pom.xml or build.gradle found in $(pwd)"; exit 1
+            fi
+          fi
+          case "$tool" in maven|gradle) ;; *) echo "::error::build-tool must be maven, gradle or auto"; exit 1 ;; esac
+          echo "tool=$tool" >> "$GITHUB_OUTPUT"
+      - uses: actions/setup-java@v6
+        with:
+          java-version: ${{ inputs.java-version }}
+          distribution: ${{ inputs.distribution }}
+          cache: ${{ steps.tool.outputs.tool }}
+      - name: Build with Maven
+        if: steps.tool.outputs.tool == 'maven'
+        env:
+          SKIP_TESTS: ${{ inputs.skip-tests }}
+        run: |
+          mvn=mvn
+          if [ -f mvnw ]; then chmod +x mvnw; mvn=./mvnw; fi
+          "$mvn" --batch-mode --no-transfer-progress verify -DskipTests="$SKIP_TESTS"
+      - name: Build with Gradle
+        if: steps.tool.outputs.tool == 'gradle'
+        env:
+          SKIP_TESTS: ${{ inputs.skip-tests }}
+        run: |
+          gradle=gradle
+          if [ -f gradlew ]; then chmod +x gradlew; gradle=./gradlew; fi
+          if [ "$SKIP_TESTS" = "true" ]; then "$gradle" --no-daemon build -x test; else "$gradle" --no-daemon build; fi
+      - uses: actions/upload-artifact@v7
+        if: inputs.artifact-name != ''
+        with:
+          name: ${{ inputs.artifact-name }}
+          # Maven writes to target/, Gradle to build/libs/. The "plain" jar is not runnable.
+          path: |
+            ${{ inputs.working-directory }}/target/*.jar
+            ${{ inputs.working-directory }}/build/libs/*.jar
+            !${{ inputs.working-directory }}/build/libs/*-plain.jar
+          if-no-files-found: error

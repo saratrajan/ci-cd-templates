@@ -22,7 +22,7 @@ jobs:
     name: markdownlint
     runs-on: ${{ inputs.runs-on }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: DavidAnson/markdownlint-cli2-action@v19
+      - uses: actions/checkout@v7
+      - uses: DavidAnson/markdownlint-cli2-action@v25
         with:
           globs: ${{ inputs.globs }}
