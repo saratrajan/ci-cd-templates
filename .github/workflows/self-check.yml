@@ -75,8 +75,10 @@ jobs:
     name: Template · Trivy scan
     uses: ./.github/workflows/scan-trivy.yml
 
-  # scan-dependencies.yml is not run here: it needs the dependency graph to be
-  # switched on in this repository's settings (Security, Dependency graph).
+  # Runs on pull requests only. Needs the dependency graph, which is switched on for this repository.
+  scan-dependencies:
+    name: Template · dependency review
+    uses: ./.github/workflows/scan-dependencies.yml
 
   scan-codeql:
     name: Template · CodeQL
