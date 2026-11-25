@@ -44,6 +44,10 @@ jobs:
     with:
       strict: true
 
+  lint-json:
+    name: Template · JSON lint
+    uses: ./.github/workflows/lint-json.yml
+
   lint-python:
     name: Template · Python lint
     uses: ./.github/workflows/lint-python.yml

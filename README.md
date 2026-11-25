@@ -18,6 +18,7 @@ the categories are in the file names: `lint-`, `test-`, `build-` and `scan-`.
 | [`lint-shell.yml`](.github/workflows/lint-shell.yml) | ShellCheck | `.shellcheckrc` |
 | [`lint-powershell.yml`](.github/workflows/lint-powershell.yml) | PSScriptAnalyzer | a settings file you name in `settings` |
 | [`lint-yaml.yml`](.github/workflows/lint-yaml.yml) | yamllint | `.yamllint`, `.yamllint.yaml` or `.yamllint.yml`; without one, a moderate built-in set |
+| [`lint-json.yml`](.github/workflows/lint-json.yml) | Python's JSON parser | none; it checks syntax and repeated keys, not style |
 
 ### Test and build
 
@@ -134,6 +135,17 @@ Every workflow also takes `runs-on` (default `ubuntu-latest`).
 With no settings file, the rules are yamllint's defaults minus four that
 object to ordinary workflow files: line length, a `---` first line, the `on:`
 key, and a comment one space after the code.
+
+### `lint-json.yml`
+
+| Input | Default | Meaning |
+| --- | --- | --- |
+| `patterns` | `"*.json"` | File name patterns to check; files tracked by git are matched anywhere in the repository |
+| `exclude` | empty | Patterns to skip, separated by spaces |
+| `allow-duplicate-keys` | `false` | Accept a key that appears twice in the same object |
+
+Files that allow comments or trailing commas, such as `tsconfig.json` and the
+files in `.vscode/`, are not strict JSON and will fail; list them in `exclude`.
 
 ### `test-python.yml`
 
