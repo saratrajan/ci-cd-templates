@@ -1,0 +1,89 @@
+# Reusable: lint YAML files with yamllint. The rules come from the calling
+# repository's own yamllint settings file; if it has none, a moderate set is
+# used (see the Lint step).
+name: YAML lint
+
+on:
+  workflow_call:
+    inputs:
+      paths:
+        description: Files or folders to lint, separated by spaces. Folders are searched for .yaml and .yml files.
+        type: string
+        default: "."
+      config-file:
+        description: Path to a yamllint settings file. Empty means .yamllint, .yamllint.yaml or .yamllint.yml in the repository root, if there is one.
+        type: string
+        default: ""
+      strict:
+        description: Fail on warnings as well as errors.
+        type: boolean
+        default: false
+      python-version:
+        description: Python version to run yamllint on.
+        type: string
+        default: "3.13"
+      yamllint-version:
+        description: A pip version specifier for yamllint, for example ">=1.35" or "==1.38.0".
+        type: string
+        default: ">=1.35"
+      runs-on:
+        description: Runner label.
+        type: string
+        default: ubuntu-latest
+
+permissions:
+  contents: read
+
+jobs:
+  yamllint:
+    name: yamllint
+    runs-on: ${{ inputs.runs-on }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: ${{ inputs.python-version }}
+      - name: Install yamllint
+        env:
+          YAMLLINT_SPEC: yamllint${{ inputs.yamllint-version }}
+        run: pip install "$YAMLLINT_SPEC"
+      - name: Lint
+        env:
+          LINT_PATHS: ${{ inputs.paths }}
+          CONFIG_FILE: ${{ inputs.config-file }}
+          STRICT: ${{ inputs.strict }}
+          # Used only when the repository has no settings file of its own.
+          # yamllint's defaults, minus the rules that object to ordinary
+          # workflow files: long lines, a missing "---" first line, the "on:"
+          # key, and a comment one space after the code.
+          FALLBACK: |
+            extends: default
+            rules:
+              line-length: disable
+              document-start: disable
+              truthy:
+                check-keys: false
+              comments:
+                min-spaces-from-content: 1
+        # The paths are split on spaces on purpose.
+        run: |
+          args=()
+          if [ -n "$CONFIG_FILE" ]; then
+            if [ ! -f "$CONFIG_FILE" ]; then
+              echo "::error::The yamllint settings file '$CONFIG_FILE' does not exist."
+              exit 1
+            fi
+            args+=(-c "$CONFIG_FILE")
+            echo "Rules: $CONFIG_FILE"
+          elif [ -f .yamllint ] || [ -f .yamllint.yaml ] || [ -f .yamllint.yml ]; then
+            echo "Rules: the settings file in the repository root"
+          else
+            args+=(-d "$FALLBACK")
+            echo "Rules: the template's own (the repository has no yamllint settings file)"
+          fi
+          [ "$STRICT" = "true" ] && args+=(--strict)
+          yamllint --version
+          # shellcheck disable=SC2086
+          echo "Linting $(yamllint --list-files "${args[@]}" $LINT_PATHS | wc -l | tr -d ' ') file(s)"
+          # shellcheck disable=SC2086
+          yamllint "${args[@]}" $LINT_PATHS

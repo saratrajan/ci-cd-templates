@@ -1,0 +1,9 @@
+# A fixture for the YAML lint template's self-check: valid, tidy YAML.
+service: sample
+replicas: 2
+ports:
+  - 8080
+  - 8443
+labels:
+  team: platform
+  tier: backend

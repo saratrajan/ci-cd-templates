@@ -38,6 +38,12 @@ jobs:
     name: Template · PowerShell lint
     uses: ./.github/workflows/lint-powershell.yml
 
+  lint-yaml:
+    name: Template · YAML lint
+    uses: ./.github/workflows/lint-yaml.yml
+    with:
+      strict: true
+
   lint-python:
     name: Template · Python lint
     uses: ./.github/workflows/lint-python.yml
