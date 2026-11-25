@@ -193,7 +193,10 @@ repositories; private ones need GitHub Advanced Security.
 | `fail-on-severity` | `high` | The least serious vulnerability that fails the job |
 | `deny-licenses` | empty | Licences to refuse, as SPDX ids separated by commas |
 
-Runs on pull requests only; on other events the job is skipped.
+Runs on pull requests only; on other events the job is skipped. The calling repository must have the
+dependency graph switched on (Settings, Advanced Security, Dependency graph);
+without it the job fails with "Forbidden". This template is the one not
+exercised by this repository's self-check, for that reason.
 
 ## Versions
 

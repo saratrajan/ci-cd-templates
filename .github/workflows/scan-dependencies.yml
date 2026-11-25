@@ -1,5 +1,6 @@
 # Reusable: on a pull request, fail if it adds a dependency with a known
 # vulnerability or a disallowed licence. Does nothing on other events.
+# The calling repository must have the dependency graph switched on.
 name: Dependency review
 
 on:
